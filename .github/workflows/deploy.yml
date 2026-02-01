@@ -1,0 +1,72 @@
+name: Publish to PyPI
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  validate-and-release:
+    name: Validate, Build, and Publish
+    runs-on: ubuntu-latest
+    # The uv image is great for speed, but for git tagging we use the runner host
+    # and just run uv commands. It's more flexible for git operations.
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Essential for finding tags
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+
+    - name: Install dependencies
+      run: uv sync --dev
+
+    - name: Run Security and Quality Checks
+      run: |
+        uv run bandit -r alembic_autoscan/ -ll
+        uv run ruff check alembic_autoscan/ --select S
+        uv run mypy alembic_autoscan/
+
+    - name: Extract project version
+      id: get_version
+      run: |
+        VERSION=$(grep -m 1 '^version = ' pyproject.toml | cut -d '"' -f 2)
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Current version is $VERSION"
+
+    - name: Check if version is increased (Check tag)
+      run: |
+        if git rev-parse "v${{ steps.get_version.outputs.VERSION }}" >/dev/null 2>&1; then
+          echo "Error: Tag v${{ steps.get_version.outputs.VERSION }} already exists. Please increase version in pyproject.toml."
+          exit 1
+        fi
+
+    - name: Check if Changelog is updated
+      run: |
+        if ! grep -q "## \[${{ steps.get_version.outputs.VERSION }}\]" CHANGELOG.md; then
+          echo "Error: Version ${{ steps.get_version.outputs.VERSION }} not found in CHANGELOG.md."
+          exit 1
+        fi
+
+    - name: Build binary wheel and source tarball
+      run: uv build
+
+    - name: Publish package to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        password: ${{ secrets.PYPI_API_TOKEN }}
+        skip-existing: true
+
+    - name: Create and Push Tag
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git tag -a "v${{ steps.get_version.outputs.VERSION }}" -m "Release v${{ steps.get_version.outputs.VERSION }}"
+        git push origin "v${{ steps.get_version.outputs.VERSION }}"

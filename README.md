@@ -143,7 +143,7 @@ git clone https://github.com/tonlls/alembic-autoscan.git
 cd alembic-autoscan
 
 # Install in development mode
-pip install -e ".[dev]"
+uv sync --dev
 
 # Run tests
 pytest

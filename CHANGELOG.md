@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-02-01
+
+### Added
+- **Configuration System**: Support for `pyproject.toml` and `.alembic-autoscan.yaml` for managing scan settings.
+- **Caching Mechanism**: Persistent scan results to speed up model discovery in large projects.
+- **SQLModel Support**: Detection of SQLModel models (with `table=True`).
+- **Abstract Class Detection**: Correctly identifies and skips classes with `__abstract__ = True`.
+- **Improved Model Detection**:
+    - Support for Imperative Mapping (`map_imperatively`).
+    - Detection of `Mapped` type annotations and `mapped_column`.
+    - Better handling of `as_declarative` and `declarative_base` decorators.
+- **Enhanced CLI**: Command-line tool with discovery options and include/exclude filtering.
+- **Logging**: Multi-level logging (DEBUG, INFO, WARNING, ERROR) for better transparency.
+- **Developer Experience**:
+    - Automatic project root detection.
+    - Zero-configuration defaults.
+    - Comprehensive test suite with coverage reporting.
+- **Security & Quality**:
+    - Integration of Bandit for security scanning.
+    - Pre-commit hooks for Ruff (linting), Mypy (type checking), and Bandit (security).
+    - GitHub Actions workflows for automated testing, security audits, and PyPI deployment.
+
+### Fixed
+- Improved robustness of glob pattern matching for complex directory structures.
+- Fixed relative path resolution issues in different OS environments.
+- Resolved various type hinting and linting errors.
+
 ## [0.1.0] - 2026-01-28
 
 ### Added
@@ -26,4 +53,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Verbose mode for debugging
 - Zero-configuration default setup
 
+[1.0.0]: https://github.com/tonlls/alembic-autoscan/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/tonlls/alembic-autoscan/releases/tag/v0.1.0

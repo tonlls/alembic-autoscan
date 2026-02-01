@@ -2,9 +2,9 @@
 User model for the example project.
 """
 
-from sqlalchemy import Column, Integer, String, DateTime
-from sqlalchemy.sql import func
 from database import Base
+from sqlalchemy import Column, DateTime, Integer, String
+from sqlalchemy.sql import func
 
 
 class User(Base):

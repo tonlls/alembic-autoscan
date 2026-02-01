@@ -3,7 +3,6 @@ Integration helpers for using alembic-autoscan with Alembic env.py.
 """
 
 import os
-import sys
 from pathlib import Path
 from typing import List, Optional
 

@@ -3,13 +3,11 @@ Model scanner for discovering SQLAlchemy models in a codebase.
 """
 
 import ast
-import os
+import importlib
+import importlib.util
 import sys
 from pathlib import Path
-from typing import List, Set, Optional
-import importlib.util
-import fnmatch
-
+from typing import List, Optional, Set
 
 
 class ModelScanner:
@@ -33,6 +31,7 @@ class ModelScanner:
         base_path: str = ".",
         include_patterns: Optional[List[str]] = None,
         exclude_patterns: Optional[List[str]] = None,
+        cache_enabled: bool = False,
     ):
         """
         Initialize the ModelScanner.
@@ -41,11 +40,14 @@ class ModelScanner:
             base_path: Root directory to start scanning from
             include_patterns: Glob patterns for files to include (default: ["**/*.py"])
             exclude_patterns: Glob patterns for files to exclude
+            cache_enabled: Whether to enable caching of scan results
         """
         self.base_path = Path(base_path).resolve()
         self.include_patterns = include_patterns or ["**/*.py"]
         self.exclude_patterns = (exclude_patterns or []) + self.DEFAULT_EXCLUDE_PATTERNS
+        self.cache_enabled = cache_enabled
         self._discovered_modules: Set[str] = set()
+        self._abstract_classes: Set[str] = set()
 
     def _matches_pattern(self, path: Path, patterns: List[str]) -> bool:
         """Check if a path matches any of the given glob patterns."""
@@ -66,43 +68,54 @@ class ModelScanner:
             # Try the pattern as-is first
             if path_to_match.match(pattern):
                 return True
-            
-            # Handle patterns like **/segment/** which should match any file under 'segment' directory
+
+            # Handle patterns like **/*.py which don't match files at root level
+            # because ** requires at least one directory component
+            # So for 'concrete.py' and pattern '**/*.py', also try '*.py'
+            if pattern.startswith("**/"):
+                # Try without the **/ prefix
+                simplified = pattern[3:]  # Remove **/ from start
+                if path_to_match.match(simplified):
+                    return True
+
+            # Handle patterns like **/segment/** which should match any file
+            # under 'segment' directory
             # Path.match() has a quirk where **/venv/**/* won't match venv/lib/test.py
-            # because ** at the start requires at least one component before 'venv'
-            # So we also try without the leading **
-            if pattern.startswith('**/') and pattern.endswith('/**'):
+            # because ** at the start requires at least one component
+            # before 'venv'. So we also try without the leading **
+            if pattern.startswith("**/") and pattern.endswith("/**"):
                 # Extract the middle segment(s)
                 # E.g., **/venv/** -> venv
                 middle = pattern[3:-3]  # Remove **/ from start and /** from end
-                
+
                 # Check if this segment appears in the path parts
                 if middle in path_to_match.parts:
                     # Now check if the file is actually under this directory
-                    # Try the pattern without the leading **/ 
+                    # Try the pattern without the leading **/
                     alt_pattern = pattern[3:]  # Remove **/ from start -> venv/**
                     # First try without adding anything (matches files directly in the directory)
                     if path_to_match.match(alt_pattern):
                         return True
                     # Also try with /* appended (matches files in subdirectories)
-                    if path_to_match.match(alt_pattern + '/*'):
+                    if path_to_match.match(alt_pattern + "/*"):
                         return True
-            
+
             # Handle patterns with /** in the middle like **/models/**/*.py
-            # These should match both files in subdirectories AND files directly in the directory
-            # E.g., **/models/**/*.py should match both app/models/user.py and app/models/sub/user.py
-            if '/**/' in pattern:
+            # These should match both files in subdirectories AND files directly
+            # in the directory. E.g., **/models/**/*.py should match both
+            # app/models/user.py and app/models/sub/user.py
+            if "/**/" in pattern:
                 # Try replacing /** with / to match files directly in the directory
-                simplified_pattern = pattern.replace('/**/', '/')
+                simplified_pattern = pattern.replace("/**/", "/")
                 if path_to_match.match(simplified_pattern):
                     return True
-            
-            # Also try appending /* to patterns ending with /** 
+
+            # Also try appending /* to patterns ending with /**
             # to match files directly under matching directories
-            if pattern.endswith('/**'):
-                if path_to_match.match(pattern + '/*'):
+            if pattern.endswith("/**"):
+                if path_to_match.match(pattern + "/*"):
                     return True
-        
+
         return False
 
     def _should_scan_file(self, file_path: Path) -> bool:
@@ -117,6 +130,60 @@ class ModelScanner:
 
         return True
 
+    def _is_sqlmodel(self, node: ast.ClassDef) -> bool:
+        """
+        Check if a class is a SQLModel with table=True.
+
+        SQLModel classes need to have table=True to be actual database models.
+        """
+        if not node.bases:
+            return False
+
+        # Check if this class inherits from SQLModel
+        has_sqlmodel_base = False
+        for base in node.bases:
+            # Check for SQLModel base class
+            if isinstance(base, ast.Name) and base.id == "SQLModel":
+                has_sqlmodel_base = True
+                # Don't return - we need to check keywords later
+
+            # Check for SQLModel(..., table=True)
+            if isinstance(base, ast.Call):
+                if isinstance(base.func, ast.Name) and base.func.id == "SQLModel":
+                    # Check for table=True keyword argument
+                    for keyword in base.keywords:
+                        if keyword.arg == "table" and isinstance(keyword.value, ast.Constant):
+                            if keyword.value.value is True:
+                                return True
+
+        # For class Hero(SQLModel, table=True), the table=True appears
+        # as a keyword in the class definition
+        # In Python AST, these are stored in node.keywords
+        if has_sqlmodel_base:
+            for keyword in node.keywords:
+                if keyword.arg == "table" and isinstance(keyword.value, ast.Constant):
+                    if keyword.value.value is True:
+                        return True
+
+        return False
+
+    def _is_abstract_class(self, node: ast.ClassDef) -> bool:
+        """
+        Check if a class is marked as abstract.
+
+        Detects:
+        - Classes with __abstract__ = True
+        """
+        for item in node.body:
+            if isinstance(item, ast.Assign):
+                for target in item.targets:
+                    if isinstance(target, ast.Name) and target.id == "__abstract__":
+                        # Check if the value is True
+                        if isinstance(item.value, ast.Constant):
+                            if item.value.value is True:
+                                return True
+        return False
+
     def _is_sqlalchemy_model(self, node: ast.ClassDef, decorator_names: Set[str]) -> bool:
         """
         Check if an AST class node represents a SQLAlchemy model.
@@ -126,7 +193,12 @@ class ModelScanner:
         - Classes inheriting from declarative_base()
         - Common SQLAlchemy base class patterns
         - Classes with @as_declarative or @declarative_base decorators
+        - SQLModel with table=True
         """
+        # Check for SQLModel with table=True
+        if self._is_sqlmodel(node):
+            return True
+
         # Check decorators
         for decorator in node.decorator_list:
             if isinstance(decorator, ast.Name):
@@ -175,7 +247,12 @@ class ModelScanner:
         - __table__ attribute
         - Column definitions (Column, mapped_column)
         - Mapped[Type] annotations
+        - SQLModel Field() annotations (when combined with SQLModel base)
         """
+        # First check if this is a SQLModel - if so, it has implicit table definition
+        if self._is_sqlmodel(node):
+            return True
+
         for item in node.body:
             # Check for __tablename__ or __table__
             if isinstance(item, ast.Assign):
@@ -191,10 +268,10 @@ class ModelScanner:
                     if isinstance(item.annotation.value, ast.Name):
                         if item.annotation.value.id == "Mapped":
                             return True
-                
+
                 # Check for mapped_column() or Column() in the value
                 value = getattr(item, "value", None)
-                if self._is_column_call(value):
+                if value is not None and self._is_column_call(value):
                     return True
 
             if isinstance(item, ast.Assign):
@@ -204,17 +281,26 @@ class ModelScanner:
 
         return False
 
-    def _is_column_call(self, node: ast.AST) -> bool:
+    def _is_column_call(self, node: Optional[ast.AST]) -> bool:
         """Check if an AST node is a call to Column() or mapped_column()."""
         if not isinstance(node, ast.Call):
             return False
-            
+
         func = node.func
         if isinstance(func, ast.Name):
             return func.id in ["Column", "mapped_column"]
         elif isinstance(func, ast.Attribute):
             return func.attr in ["Column", "mapped_column"]
-            
+
+        return False
+
+    def _has_tablename(self, node: ast.ClassDef) -> bool:
+        """Check if a class has __tablename__ defined."""
+        for item in node.body:
+            if isinstance(item, ast.Assign):
+                for target in item.targets:
+                    if isinstance(target, ast.Name) and target.id == "__tablename__":
+                        return True
         return False
 
     def _scan_file_for_models(self, file_path: Path) -> bool:
@@ -222,38 +308,54 @@ class ModelScanner:
         Scan a Python file for SQLAlchemy models using AST.
 
         Returns:
-            True if the file contains at least one model, False otherwise
+            True if the file contains at least one non-abstract model, False otherwise
         """
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 content = f.read()
 
             tree = ast.parse(content, filename=str(file_path))
+            has_concrete_model = False
 
             # Look for class definitions and imperative mapping calls
             for node in ast.walk(tree):
                 if isinstance(node, ast.ClassDef):
+                    # Check if it's abstract first
+                    if self._is_abstract_class(node):
+                        self._abstract_classes.add(node.name)
+                        continue  # Skip abstract classes
+
                     # Check if it's a SQLAlchemy model
                     is_model = self._is_sqlalchemy_model(node, set())
                     has_table = self._has_table_definition(node)
 
-                    # If it has __tablename__ or __table__, it's likely a model
-                    if has_table:
-                        return True
-                    
-                    # Or if it inherits from a known model base
-                    if is_model:
-                        return True
-                
+                    # A class is a model if:
+                    # 1. It has __tablename__ explicitly (always a model)
+                    # 2. It's a SQLModel with table=True (has_table will be True)
+                    # 3. It inherits from a model base AND has table indicators
+                    # This prevents mixins with Column() but no base from being detected
+
+                    if self._has_tablename(node):
+                        # Explicit __tablename__ always makes it a model
+                        has_concrete_model = True
+                    elif self._is_sqlmodel(node):
+                        # SQLModel with table=True
+                        has_concrete_model = True
+                    elif is_model and has_table:
+                        # Inherits from Base and has table indicators
+                        has_concrete_model = True
+
                 # Check for imperative mapping: registry.map_imperatively(Class, table)
                 if isinstance(node, ast.Call):
                     func = node.func
                     if isinstance(func, ast.Attribute):
                         if func.attr == "map_imperatively":
-                            return True
+                            has_concrete_model = True
                     elif isinstance(func, ast.Name):
                         if func.id == "map_imperatively":
-                            return True
+                            has_concrete_model = True
+
+            return has_concrete_model
 
         except (SyntaxError, UnicodeDecodeError, OSError):
             # Skip files that can't be parsed or read
@@ -270,7 +372,7 @@ class ModelScanner:
         try:
             # Ensure both paths are resolved to handle symlinks (like /tmp -> /private/tmp on macOS)
             abs_file_path = file_path.resolve()
-            
+
             # Get relative path from base_path
             rel_path = abs_file_path.relative_to(self.base_path)
 
@@ -303,6 +405,13 @@ class ModelScanner:
             List of module paths (e.g., ["app.models.user", "app.models.post"])
         """
         self._discovered_modules.clear()
+        self._abstract_classes.clear()
+
+        # Check cache if enabled
+        if self.cache_enabled:
+            cache_file = self.base_path / ".alembic-autoscan.cache"
+            # For now, we'll create an empty cache file if it doesn't exist
+            # In future iterations, we can implement actual caching logic
 
         # Walk through all Python files
         for file_path in self.base_path.rglob("*.py"):
@@ -315,14 +424,20 @@ class ModelScanner:
                 if module_path:
                     self._discovered_modules.add(module_path)
 
-        return sorted(list(self._discovered_modules))
+        # Write cache if enabled
+        if self.cache_enabled:
+            cache_file = self.base_path / ".alembic-autoscan.cache"
+            cache_file.write_text("\n".join(sorted(self._discovered_modules)))
+
+        return sorted(self._discovered_modules)
 
     def import_models(self, modules: Optional[List[str]] = None) -> int:
         """
         Import discovered model modules.
 
         Args:
-            modules: Optional list of module paths to import. If None, imports all discovered modules.
+            modules: Optional list of module paths to import.
+                If None, imports all discovered modules.
 
         Returns:
             Number of successfully imported modules

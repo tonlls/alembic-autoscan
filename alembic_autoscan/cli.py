@@ -3,12 +3,9 @@ CLI interface for alembic-autoscan.
 """
 
 import argparse
-import sys
-import os
-from typing import List, Optional
 
-from .scanner import ModelScanner
 from .integration import get_project_root
+from .scanner import ModelScanner
 
 
 def discover_command(args: argparse.Namespace) -> None:
