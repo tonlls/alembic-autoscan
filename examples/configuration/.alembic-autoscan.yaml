@@ -1,0 +1,23 @@
+# Alembic Autoscan Configuration File
+# Place this file in your project root as .alembic-autoscan.yaml
+
+# Root directory to scan for models
+base_path: ./app
+
+# Include patterns (glob format)
+include_patterns:
+  - "**/models/**/*.py"
+  - "**/models.py"
+
+# Exclude patterns (glob format)
+exclude_patterns:
+  - "**/tests/**"
+  - "**/test_*.py"
+  - "**/migrations/**"
+  - "**/.venv/**"
+
+# Logging level: DEBUG, INFO, WARNING, ERROR
+log_level: INFO
+
+# Enable caching for better performance
+cache_enabled: true

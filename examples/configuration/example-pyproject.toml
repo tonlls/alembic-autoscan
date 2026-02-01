@@ -1,0 +1,22 @@
+[tool.alembic-autoscan]
+# Root directory to scan for models
+base_path = "./src"
+
+# Include only files in models directories
+include_patterns = [
+    "**/models/**/*.py",
+    "**/models.py",
+]
+
+# Exclude test files and migrations
+exclude_patterns = [
+    "**/tests/**",
+    "**/test_*.py",
+    "**/migrations/**",
+]
+
+# Logging level (DEBUG, INFO, WARNING, ERROR)
+log_level = "INFO"
+
+# Enable caching for faster subsequent scans
+cache_enabled = true

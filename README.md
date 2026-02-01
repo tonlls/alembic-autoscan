@@ -24,14 +24,17 @@ You can test model discovery from the command line:
 
 ```bash
 # Scan the current directory
-alembic-autoscan discover
+alembic-autoscan scan
 
 # Scan a specific directory
-alembic-autoscan discover ./app
+alembic-autoscan scan ./app
 
 # Scan with include/exclude patterns
-alembic-autoscan discover ./app --include "**/models/**" --exclude "**/tests/**"
+alembic-autoscan scan ./app --include "**/models/**" --exclude "**/tests/**"
 ```
+
+> [!NOTE]
+> The `scan` command replaces the older `discover` and `check` commands. The `check` command is deprecated and will be removed in a future version.
 
 ## Quick Start
 
@@ -143,7 +146,7 @@ git clone https://github.com/tonlls/alembic-autoscan.git
 cd alembic-autoscan
 
 # Install in development mode
-pip install -e ".[dev]"
+uv sync --dev
 
 # Run tests
 pytest

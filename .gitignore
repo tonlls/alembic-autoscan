@@ -44,6 +44,7 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+test-results/
 
 # Virtual environments
 venv/
@@ -51,6 +52,7 @@ env/
 ENV/
 env.bak/
 venv.bak/
+.venv/
 
 # IDEs
 .vscode/
@@ -58,12 +60,39 @@ venv.bak/
 *.swp
 *.swo
 *~
+*.sublime-project
+*.sublime-workspace
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Alembic
 alembic/versions/*.pyc
 *.db
 *.sqlite
+*.sqlite3
+
+# Type checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Linters & Formatters
+.ruff_cache/
+
+# Package managers
+uv.lock
+poetry.lock
+Pipfile.lock
+
+# Environment files
+.env
+.env.local
+.envrc
+
+# Alembic Autoscan cache
+.alembic-autoscan.cache

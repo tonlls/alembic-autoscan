@@ -1,5 +1,7 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, ForeignKey, Integer, String
+
 from ..database import Base
+
 
 class Employee(Base):
     __tablename__ = "employees"
@@ -11,6 +13,7 @@ class Employee(Base):
         "polymorphic_identity": "employee",
         "polymorphic_on": type,
     }
+
 
 class Engineer(Employee):
     __tablename__ = "engineers"

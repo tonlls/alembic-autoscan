@@ -3,16 +3,16 @@ Post model for the example project.
 """
 
 # from models.post import Post
-from models.article_tablename import ArticleTablename
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from database import Base
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from database import Base
+
+from models.article_tablename import ArticleTablename
 
 
-class Article(Base,ArticleTablename):
+class Article(Base, ArticleTablename):
     """Article model representing blog posts."""
-
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(200), nullable=False)

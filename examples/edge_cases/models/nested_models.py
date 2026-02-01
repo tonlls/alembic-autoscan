@@ -1,5 +1,7 @@
 from sqlalchemy import Column, Integer, String
+
 from ..database import Base
+
 
 class Outer:
     class InnerModel(Base):

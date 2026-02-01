@@ -1,8 +1,11 @@
-from sqlalchemy import Table, Column, Integer, String
+from sqlalchemy import Column, Integer, String, Table
+
 from ..database import mapper_registry
+
 
 class UserImperative:
     pass
+
 
 user_table = Table(
     "user_imperative",

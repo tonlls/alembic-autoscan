@@ -1,0 +1,38 @@
+name: Security Scan
+
+on:
+  pull_request:
+    branches:
+      - main
+      - development
+
+jobs:
+  security:
+    name: Security Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run Bandit
+        run: uv run bandit -r alembic_autoscan/ -ll
+
+      - name: Run Safety check
+        run: |
+          uv pip freeze > requirements.txt
+          uv run safety check -r requirements.txt
+        continue-on-error: true
+
+      - name: Run Ruff (Security rules)
+        run: uv run ruff check alembic_autoscan/ --select S
+
+      - name: Run Mypy
+        run: uv run mypy alembic_autoscan/

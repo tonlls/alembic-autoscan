@@ -10,16 +10,11 @@ git clone https://github.com/tonlls/alembic-autoscan.git
 cd alembic-autoscan
 ```
 
-2. Create a virtual environment:
+2. Install dependencies (recommended with [uv](https://docs.astral.sh/uv/)):
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+uv sync --dev
 ```
-
-3. Install in development mode:
-```bash
-pip install -e ".[dev]"
-```
+If you are using standard pip, you will need to manually install the dependencies listed in `[dependency-groups]` in `pyproject.toml`.
 
 4. Install pre-commit hooks:
 ```bash
