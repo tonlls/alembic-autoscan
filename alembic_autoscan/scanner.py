@@ -6,6 +6,7 @@ import ast
 import importlib
 import importlib.util
 import logging
+import os
 import sys
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import cpu_count
@@ -289,38 +290,52 @@ class ModelScanner:
     def _matches_pattern(self, path: Path, patterns: List[str]) -> bool:
         """Check if a path matches any of the given glob patterns."""
         try:
-            if not path.is_absolute():
-                path_to_match = path
+            if path.is_absolute():
+                path_to_match = path.resolve().relative_to(self.base_path.resolve())
             else:
-                path_to_match = path.relative_to(self.base_path)
+                path_to_match = path
         except (ValueError, OSError):
             path_to_match = path
 
+        path_str = str(path_to_match).replace(os.sep, "/")
+        parts = path_to_match.parts
+
         for pattern in patterns:
+            # 1. Try standard pathlib match
             if path_to_match.match(pattern):
                 return True
 
-            # Additional matching heuristics for recursive patterns
-            if pattern.startswith("**/"):
-                simplified = pattern[3:]
-                if path_to_match.match(simplified):
+            # 2. Try matching against the full relative path string using fnmatch
+            norm_pattern = pattern.replace(os.sep, "/")
+            import fnmatch
+
+            if fnmatch.fnmatch(path_str, norm_pattern):
+                return True
+
+            # 3. Handle directory-only patterns like "venv" or "tests"
+            if "/" not in norm_pattern and "*" not in norm_pattern:
+                if norm_pattern in parts:
                     return True
 
-            if pattern.startswith("**/") and pattern.endswith("/**"):
-                middle = pattern[3:-3]
-                if middle in path_to_match.parts:
-                    alt_pattern = pattern[3:]
-                    if path_to_match.match(alt_pattern) or path_to_match.match(alt_pattern + "/*"):
+            # 4. Handle patterns like **/dir/** or **/dir
+            if "**" in norm_pattern:
+                clean_pattern = norm_pattern.replace("**/", "").replace("/**", "").strip("/")
+                if clean_pattern and "/" not in clean_pattern and "*" not in clean_pattern:
+                    if clean_pattern in parts:
                         return True
 
-            if "/**/" in pattern:
-                simplified_pattern = pattern.replace("/**/", "/")
-                if path_to_match.match(simplified_pattern):
-                    return True
+                # Fallback for start-with **/
+                if norm_pattern.startswith("**/"):
+                    if path_to_match.match(norm_pattern[3:]):
+                        return True
 
-            if pattern.endswith("/**"):
-                if path_to_match.match(pattern + "/*"):
-                    return True
+                # Simplify globstars for matching
+                if "/**/" in norm_pattern:
+                    simplified = norm_pattern.replace("/**/", "/")
+                    if path_to_match.match(simplified) or fnmatch.fnmatch(path_str, simplified):
+                        return True
+                    if simplified.startswith("**/") and path_to_match.match(simplified[3:]):
+                        return True
 
         return False
 
@@ -336,19 +351,31 @@ class ModelScanner:
         """Convert a file path to a Python module path."""
         try:
             abs_file_path = file_path.resolve()
-            rel_path = abs_file_path.relative_to(self.base_path)
+            rel_path = abs_file_path.relative_to(self.base_path.resolve())
             if rel_path.suffix == ".py":
                 rel_path = rel_path.with_suffix("")
 
             parts = list(rel_path.parts)
+
             if parts[-1] == "__init__":
                 parts = parts[:-1]
 
             if not parts:
                 return None
 
+            # Filter out segments that start with a dot (except for current/parent dir
+            # which shouldn't be here) or contain invalid characters for Python identifiers.
+            for part in parts:
+                if part.startswith(".") and part != "." and part != "..":
+                    return None
+                # Check if it's a valid identifier.
+                # Note: some legitimate packages might have dashes or other chars if they use
+                # non-standard layouts, but for models it's almost always valid identifiers.
+                if not part.isidentifier() and part != "__init__":
+                    return None
+
             return ".".join(parts)
-        except ValueError:
+        except (ValueError, OSError):
             return None
 
     def discover(self) -> List[str]:
