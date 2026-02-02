@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from alembic_autoscan.scanner import ModelScanner
+from alembic_autoscan.scanner import ModelScanner, scan_file_worker
 
 
 class TestSQLModelDetection:
@@ -29,8 +29,8 @@ class Hero(SQLModel, table=True):
 """
             )
 
-            scanner = ModelScanner(base_path=tmpdir)
-            assert scanner._scan_file_for_models(model_file)
+            _, is_model, _ = scan_file_worker(model_file)
+            assert is_model
 
     def test_ignore_sqlmodel_without_table(self):
         """Test that SQLModel without table=True is ignored."""
@@ -46,9 +46,8 @@ class HeroBase(SQLModel):
 """
             )
 
-            scanner = ModelScanner(base_path=tmpdir)
-            # Should not detect this as a model (no table=True)
-            assert not scanner._scan_file_for_models(model_file)
+            _, is_model, _ = scan_file_worker(model_file)
+            assert not is_model
 
 
 class TestAbstractClassDetection:
@@ -72,13 +71,13 @@ class ConcreteModel(AbstractBase):
 """
             )
 
-            scanner = ModelScanner(base_path=tmpdir)
+            _, is_model, abstracts = scan_file_worker(model_file)
 
             # Should detect the file has models (ConcreteModel)
-            assert scanner._scan_file_for_models(model_file)
+            assert is_model
 
             # Should have tracked the abstract class
-            assert "AbstractBase" in scanner._abstract_classes
+            assert "AbstractBase" in abstracts
 
     def test_skip_abstract_class_in_discovery(self):
         """Test that abstract classes don't get their own module entry."""
@@ -133,8 +132,8 @@ class ModernModel(Base):
 """
             )
 
-            scanner = ModelScanner(base_path=tmpdir)
-            assert scanner._scan_file_for_models(model_file)
+            _, is_model, _ = scan_file_worker(model_file)
+            assert is_model
 
     def test_detect_mapped_column(self):
         """Test detection of mapped_column() calls."""
@@ -151,8 +150,8 @@ class User(Base):
 """
             )
 
-            scanner = ModelScanner(base_path=tmpdir)
-            assert scanner._scan_file_for_models(model_file)
+            _, is_model, _ = scan_file_worker(model_file)
+            assert is_model
 
 
 class TestMixins:
@@ -172,9 +171,9 @@ class TimestampMixin:
 """
             )
 
-            scanner = ModelScanner(base_path=tmpdir)
             # Mixin without Base or __tablename__ should not be detected
-            assert not scanner._scan_file_for_models(mixin_file)
+            _, is_model, _ = scan_file_worker(mixin_file)
+            assert not is_model
 
     def test_model_with_mixin(self):
         """Test model that uses a mixin."""
@@ -193,8 +192,8 @@ class User(Base, TimestampMixin):
 """
             )
 
-            scanner = ModelScanner(base_path=tmpdir)
-            assert scanner._scan_file_for_models(model_file)
+            _, is_model, _ = scan_file_worker(model_file)
+            assert is_model
 
 
 class TestCacheIntegration:

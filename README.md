@@ -149,11 +149,14 @@ cd alembic-autoscan
 uv sync --dev
 
 # Run tests
-pytest
+uv run pytest
+
+# Run performance tests
+uv run pytest tests/test_large_scale.py -v -s
 
 # Format and lint code
-ruff check --fix .
-ruff format .
+uv run ruff check --fix .
+uv run ruff format .
 ```
 
 ## Contributing

@@ -10,7 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Configuration System**: Support for `pyproject.toml` and `.alembic-autoscan.yaml` for managing scan settings.
 - **Caching Mechanism**: Persistent scan results to speed up model discovery in large projects.
+- **Parallel Scanning**: Multi-process scanning for improved performance on large codebases.
+- **Standard Ignore Support**: Automatically reads and respects `.gitignore` patterns.
 - **SQLModel Support**: Detection of SQLModel models (with `table=True`).
+- **Strict Mode**: Validation feature to ensure discovered modules can be successfully imported.
 - **Abstract Class Detection**: Correctly identifies and skips classes with `__abstract__ = True`.
 - **Improved Model Detection**:
     - Support for Imperative Mapping (`map_imperatively`).
@@ -24,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Comprehensive test suite with coverage reporting.
 - **Security & Quality**:
     - Integration of Bandit for security scanning.
+    - Added `SECURITY.md` for vulnerability reporting policy.
     - Pre-commit hooks for Ruff (linting), Mypy (type checking), and Bandit (security).
     - GitHub Actions workflows for automated testing, security audits, and PyPI deployment.
 

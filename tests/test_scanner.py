@@ -1,14 +1,11 @@
-"""
-Tests for the ModelScanner class.
-"""
-
+import json
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from alembic_autoscan.scanner import ModelScanner
+from alembic_autoscan.scanner import ModelScanner, scan_file_worker
 
 
 class TestModelScanner:
@@ -69,8 +66,8 @@ class User(Base):
 """
             )
 
-            scanner = ModelScanner(base_path=tmpdir)
-            assert scanner._scan_file_for_models(model_file)
+            _, is_model, _ = scan_file_worker(model_file)
+            assert is_model
 
     def test_detect_sqlalchemy_model_with_tablename(self):
         """Test detection via __tablename__ attribute."""
@@ -84,8 +81,8 @@ class Post:
 """
             )
 
-            scanner = ModelScanner(base_path=tmpdir)
-            assert scanner._scan_file_for_models(model_file)
+            _, is_model, _ = scan_file_worker(model_file)
+            assert is_model
 
     def test_ignore_non_model_classes(self):
         """Test that non-model classes are ignored."""
@@ -99,8 +96,8 @@ class Helper:
 """
             )
 
-            scanner = ModelScanner(base_path=tmpdir)
-            assert not scanner._scan_file_for_models(regular_file)
+            _, is_model, _ = scan_file_worker(regular_file)
+            assert not is_model
 
     def test_module_path_conversion(self):
         """Test conversion of file paths to module paths."""
@@ -190,8 +187,8 @@ class Hero(SQLModel, table=True):
 """
             )
 
-            scanner = ModelScanner(base_path=tmpdir)
-            assert scanner._scan_file_for_models(model_file)
+            _, is_model, _ = scan_file_worker(model_file)
+            assert is_model
 
     def test_detect_sqlmodel_functional(self):
         """Test detection of SQLModel models with functional syntax."""
@@ -206,8 +203,8 @@ class Hero(SQLModel(table=True)):
 """
             )
 
-            scanner = ModelScanner(base_path=tmpdir)
-            assert scanner._scan_file_for_models(model_file)
+            _, is_model, _ = scan_file_worker(model_file)
+            assert is_model
 
     def test_detect_as_declarative_decorator(self):
         """Test detection via decorators."""
@@ -223,8 +220,8 @@ class Base:
 """
             )
 
-            scanner = ModelScanner(base_path=tmpdir)
-            assert scanner._scan_file_for_models(model_file)
+            _, is_model, _ = scan_file_worker(model_file)
+            assert is_model
 
     def test_detect_mapped_subscript(self):
         """Test detection of Mapped[Type] annotations."""
@@ -240,8 +237,8 @@ class User(DeclarativeBase):
 """
             )
 
-            scanner = ModelScanner(base_path=tmpdir)
-            assert scanner._scan_file_for_models(model_file)
+            _, is_model, _ = scan_file_worker(model_file)
+            assert is_model
 
     def test_detect_imperative_mapping(self):
         """Test detection of imperative mapping."""
@@ -255,13 +252,14 @@ reg.map_imperatively(User, table)
 """
             )
 
-            scanner = ModelScanner(base_path=tmpdir)
-            assert scanner._scan_file_for_models(model_file)
+            _, is_model, _ = scan_file_worker(model_file)
+            assert is_model
 
     def test_discover_with_cache(self):
         """Test discovery with cache enabled."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            model_file = Path(tmpdir) / "user.py"
+            models_dir = Path(tmpdir)
+            model_file = models_dir / "user.py"
             model_file.write_text("class User:\n    __tablename__ = 'users'")
 
             scanner = ModelScanner(base_path=tmpdir, cache_enabled=True)
@@ -270,7 +268,16 @@ reg.map_imperatively(User, table)
             assert "user" in discovered
             cache_file = Path(tmpdir) / ".alembic-autoscan.cache"
             assert cache_file.exists()
-            assert cache_file.read_text().strip() == "user"
+
+            # Verify cache content
+            with cache_file.open() as f:
+                data = json.load(f)
+                # Should find an entry where user keys exist
+                # Format: {"hash": {"filepath": {...}}}
+                assert len(data) > 0
+                first_key = list(data.keys())[0]
+                assert str(model_file.resolve()) in data[first_key]
+                assert data[first_key][str(model_file.resolve())]["is_model"] is True
 
     def test_import_models(self):
         """Test importing discovered models."""
@@ -323,8 +330,8 @@ class User(db.Model):
     __tablename__ = "users"
 """
             )
-            scanner = ModelScanner(base_path=tmpdir)
-            assert scanner._scan_file_for_models(model_file)
+            _, is_model, _ = scan_file_worker(model_file)
+            assert is_model
 
     def test_detect_functional_base(self):
         """Test detection of class User(declarative_base())."""
@@ -338,8 +345,8 @@ class User(Base):
     __tablename__ = "users"
 """
             )
-            scanner = ModelScanner(base_path=tmpdir)
-            assert scanner._scan_file_for_models(model_file)
+            _, is_model, _ = scan_file_worker(model_file)
+            assert is_model
 
     def test_ignore_abstract_class(self):
         """Test that abstract classes are ignored."""
@@ -352,9 +359,9 @@ class Base:
     __tablename__ = "base"
 """
             )
-            scanner = ModelScanner(base_path=tmpdir)
-            assert not scanner._scan_file_for_models(model_file)
-            assert "Base" in scanner._abstract_classes
+            _, is_model, abstracts = scan_file_worker(model_file)
+            assert not is_model
+            assert "Base" in abstracts
 
 
 if __name__ == "__main__":
