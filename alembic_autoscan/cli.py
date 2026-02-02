@@ -1,6 +1,7 @@
 import argparse
 import sys
 
+from .config import load_config, setup_logging
 from .integration import get_project_root
 from .scanner import ModelScanner
 
@@ -12,19 +13,37 @@ def scan_command(args: argparse.Namespace) -> None:
         # If no path provided, try to find project root or use current dir
         path = str(get_project_root())
 
-    scanner = ModelScanner(
+    # Load configuration
+    config = load_config(
         base_path=path,
         include_patterns=args.include,
         exclude_patterns=args.exclude,
+        log_level="DEBUG" if args.verbose else None,
+        cache_enabled=False if args.no_cache else None,
+        parallel_enabled=True if args.parallel else None,
+        strict_mode=True if args.strict else None,
+        config_file=args.config,
+    )
+
+    setup_logging(config.log_level)
+
+    scanner = ModelScanner(
+        base_path=config.base_path,
+        include_patterns=config.include_patterns,
+        exclude_patterns=config.exclude_patterns,
+        cache_enabled=config.cache_enabled,
+        parallel_enabled=config.parallel_enabled,
+        parallel_threshold=config.parallel_threshold,
+        strict_mode=config.strict_mode,
     )
 
     modules = scanner.discover()
 
     if not modules:
-        print(f"No SQLAlchemy models found in {path}")
+        print(f"No SQLAlchemy models found in {config.base_path}")
         return
 
-    print(f"Discovered {len(modules)} model modules in {path}:")
+    print(f"Discovered {len(modules)} model modules in {config.base_path}:")
     for module in modules:
         print(f"  - {module}")
 
@@ -74,6 +93,32 @@ def main() -> None:
             "--exclude",
             action="append",
             help="Glob patterns to exclude (e.g., '**/tests/**')",
+        )
+        subparser.add_argument(
+            "--no-cache",
+            action="store_true",
+            help="Disable caching of scan results",
+        )
+        subparser.add_argument(
+            "--parallel",
+            action="store_true",
+            help="Force parallel scanning",
+        )
+        subparser.add_argument(
+            "--strict",
+            action="store_true",
+            help="Verify that models can be imported",
+        )
+        subparser.add_argument(
+            "-v",
+            "--verbose",
+            action="store_true",
+            help="Enable verbose logging",
+        )
+        subparser.add_argument(
+            "-c",
+            "--config",
+            help="Path to configuration file",
         )
 
     # Scan command (new primary command)

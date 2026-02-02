@@ -42,6 +42,7 @@ class Config:
         cache_enabled: bool = True,
         parallel_enabled: Optional[bool] = None,
         parallel_threshold: int = 100,
+        strict_mode: bool = False,
     ):
         """
         Initialize configuration.
@@ -62,6 +63,7 @@ class Config:
         self.cache_enabled = cache_enabled
         self.parallel_enabled = parallel_enabled
         self.parallel_threshold = parallel_threshold
+        self.strict_mode = strict_mode
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary."""
@@ -73,6 +75,7 @@ class Config:
             "cache_enabled": self.cache_enabled,
             "parallel_enabled": self.parallel_enabled,
             "parallel_threshold": self.parallel_threshold,
+            "strict_mode": self.strict_mode,
         }
 
     @classmethod
@@ -86,6 +89,7 @@ class Config:
             cache_enabled=data.get("cache_enabled", True),
             parallel_enabled=data.get("parallel_enabled"),
             parallel_threshold=data.get("parallel_threshold", 100),
+            strict_mode=data.get("strict_mode", False),
         )
 
 
@@ -123,7 +127,7 @@ def _load_yaml_config(config_path: Path) -> Dict[str, Any]:
     """Load configuration from YAML file."""
     if yaml is None:
         logger.warning(
-            f"PyYAML not installed, cannot load {config_path}. " "Install with: pip install pyyaml"
+            f"PyYAML not installed, cannot load {config_path}. Install with: pip install pyyaml"
         )
         return {}
 
@@ -170,6 +174,7 @@ def load_config(
     cache_enabled: Optional[bool] = None,
     parallel_enabled: Optional[bool] = None,
     parallel_threshold: Optional[int] = None,
+    strict_mode: Optional[bool] = None,
     config_file: Optional[str] = None,
 ) -> Config:
     """
@@ -229,6 +234,8 @@ def load_config(
         config_data["parallel_enabled"] = parallel_enabled
     if parallel_threshold is not None:
         config_data["parallel_threshold"] = parallel_threshold
+    if strict_mode is not None:
+        config_data["strict_mode"] = strict_mode
 
     return Config.from_dict(config_data)
 

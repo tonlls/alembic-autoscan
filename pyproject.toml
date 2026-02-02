@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "alembic-autoscan"
-version = "1.0.0"
+version = "1.2.0"
 description = "Automatically discover and import SQLAlchemy models for Alembic migrations"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -30,6 +30,9 @@ dependencies = [
     "sqlalchemy>=1.4.0",
     "alembic>=1.7.0",
 ]
+
+[project.optional-dependencies]
+yaml = ["PyYAML>=6.0"]
 
 [project.scripts]
 alembic-autoscan = "alembic_autoscan.cli:main"
